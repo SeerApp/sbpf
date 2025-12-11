@@ -597,6 +597,19 @@ impl<'a> MemoryMapping<'a> {
     }
 }
 
+impl<'a> seer_interface::GuestMemory for MemoryMapping<'a> {
+    fn read(&mut self, addr: u64, len: u64) -> Vec<u8> {
+        let host_addr = match self.map_with_access_violation_handler(AccessType::Load, addr, len) {
+            ProgramResult::Ok(ptr) => ptr,
+            ProgramResult::Err(e) => { panic!("{:?}", e) },
+        };
+        
+        let bytes = unsafe { std::slice::from_raw_parts(host_addr as *const u8, len as usize) };
+
+        bytes.to_vec()
+    }
+}
+
 /// Fast, small linear cache used to speed up unaligned memory mapping.
 #[derive(Debug)]
 struct MappingCache {
