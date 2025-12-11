@@ -128,7 +128,6 @@ impl<'a, 'b, C: ContextObject> Interpreter<'a, 'b, C> {
     }
 
     /// Translate between the virtual machines' pc value and the pc value used by the debugger
-    #[cfg(feature = "debugger")]
     pub fn get_dbg_pc(&self) -> u64 {
         (self.reg[11] * ebpf::INSN_SIZE as u64) + self.executable.get_text_section_offset()
     }
@@ -190,6 +189,8 @@ impl<'a, 'b, C: ContextObject> Interpreter<'a, 'b, C> {
         if config.enable_instruction_tracing {
             self.vm.context_object_pointer.trace(self.reg);
         }
+
+        seer_core::get().step(&self.get_dbg_pc(), &mut self.vm.memory_mapping, &self.reg);
 
         match insn.opc {
             ebpf::LD_DW_IMM if !self.executable.get_sbpf_version().disable_lddw() => {
