@@ -369,6 +369,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "ed25519"
+version = "2.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
+dependencies = [
+ "pkcs8",
+ "signature",
+]
+
+[[package]]
+name = "ed25519-dalek"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
+dependencies = [
+ "curve25519-dalek",
+ "ed25519",
+ "rand_core",
+ "serde",
+ "sha2",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
 name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -792,6 +817,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1de2e551fb905ac83f73f7aedf2f0cb4a0da7e35efa24a202a936269f1f18e1"
 
 [[package]]
+name = "pbkdf2"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83a0692ec44e4cf1ef28ca317f14f8f07da2d95ec3fa01f86e4467b725e60917"
+dependencies = [
+ "digest",
+]
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1002,6 +1036,7 @@ dependencies = [
  "anyhow",
  "fallible-iterator",
  "gimli",
+ "log",
  "memmap2",
  "object",
  "once_cell",
@@ -1011,15 +1046,17 @@ dependencies = [
  "serde",
  "serde_json",
  "solana-instruction",
+ "solana-keypair",
  "solana-program",
  "solana-pubkey 3.0.0",
  "solana-signature",
+ "solana-signer",
  "typed-arena",
 ]
 
 [[package]]
 name = "seer-interface"
-version = "0.0.0"
+version = "0.8.2"
 
 [[package]]
 name = "semver"
@@ -1412,6 +1449,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-keypair"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80eaf45d386c94e59c0c2d3db4a76c05f90365394aa848edce5826d3f7e77fb3"
+dependencies = [
+ "ed25519-dalek",
+ "five8 0.2.1",
+ "rand",
+ "solana-pubkey 3.0.0",
+ "solana-seed-phrase",
+ "solana-signature",
+ "solana-signer",
+]
+
+[[package]]
 name = "solana-last-restart-slot"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1654,6 +1706,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-seed-phrase"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc905b200a95f2ea9146e43f2a7181e3aeb55de6bc12afb36462d00a3c7310de"
+dependencies = [
+ "hmac",
+ "pbkdf2",
+ "sha2",
+]
+
+[[package]]
 name = "solana-serde-varint"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1699,8 +1762,20 @@ version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bb8057cc0e9f7b5e89883d49de6f407df655bb6f3a71d0b7baf9986a2218fd9"
 dependencies = [
+ "ed25519-dalek",
  "five8 0.2.1",
  "solana-sanitize",
+]
+
+[[package]]
+name = "solana-signer"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bfea97951fee8bae0d6038f39a5efcb6230ecdfe33425ac75196d1a1e3e3235"
+dependencies = [
+ "solana-pubkey 3.0.0",
+ "solana-signature",
+ "solana-transaction-error",
 ]
 
 [[package]]
