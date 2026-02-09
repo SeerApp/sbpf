@@ -14,7 +14,7 @@ use solana_sbpf::{
     elf::Executable,
     error::EbpfError,
     memory_region::{AccessViolationHandler, MemoryMapping, MemoryRegion},
-    static_analysis::RegisterTraceEntry,
+    static_analysis::TraceLogEntry,
     vm::ContextObject,
 };
 
@@ -23,11 +23,17 @@ pub mod syscalls;
 /// Simple instruction meter for testing
 #[derive(Debug, Clone, Default)]
 pub struct TestContextObject {
+    /// Contains the register state at every instruction in order of execution
+    pub trace_log: Vec<TraceLogEntry>,
     /// Maximal amount of instructions which still can be executed
     pub remaining: u64,
 }
 
 impl ContextObject for TestContextObject {
+    fn trace(&mut self, state: [u64; 12]) {
+        self.trace_log.push(state);
+    }
+
     fn consume(&mut self, amount: u64) {
         self.remaining = self.remaining.saturating_sub(amount);
     }
@@ -40,21 +46,23 @@ impl ContextObject for TestContextObject {
 impl TestContextObject {
     /// Initialize with instruction meter
     pub fn new(remaining: u64) -> Self {
-        Self { remaining }
+        Self {
+            trace_log: Vec::new(),
+            remaining,
+        }
     }
-}
 
-/// Compares an interpreter trace and a JIT trace.
-///
-/// The log of the JIT can be longer because it only validates the instruction meter at branches.
-pub fn compare_register_trace(
-    interpreter: &[RegisterTraceEntry],
-    mut jit: &[RegisterTraceEntry],
-) -> bool {
-    if jit.len() > interpreter.len() {
-        jit = &jit[0..interpreter.len()];
+    /// Compares an interpreter trace and a JIT trace.
+    ///
+    /// The log of the JIT can be longer because it only validates the instruction meter at branches.
+    pub fn compare_trace_log(interpreter: &Self, jit: &Self) -> bool {
+        let interpreter = interpreter.trace_log.as_slice();
+        let mut jit = jit.trace_log.as_slice();
+        if jit.len() > interpreter.len() {
+            jit = &jit[0..interpreter.len()];
+        }
+        interpreter == jit
     }
-    interpreter == jit
 }
 
 // Assembly code and data for tcp_sack testcases.
@@ -286,7 +294,7 @@ macro_rules! test_interpreter_and_jit {
             context_object.remaining = INSTRUCTION_METER_BUDGET;
         }
         $executable.verify::<RequisiteVerifier>().unwrap();
-        let (instruction_count_interpreter, result_interpreter, interpreter_final_pc, _trace_interpreter) = {
+        let (instruction_count_interpreter, result_interpreter, interpreter_final_pc, _tracer_interpreter) = {
             let mut mem = $mem;
             let mem_region = MemoryRegion::new_writable(&mut mem, ebpf::MM_INPUT_START);
             let mut context_object = context_object.clone();
@@ -305,7 +313,7 @@ macro_rules! test_interpreter_and_jit {
                 instruction_count_interpreter,
                 result_interpreter,
                 vm.registers[11],
-                vm.register_trace.clone(),
+                vm.context_object_pointer.clone(),
             )
         };
         #[cfg(all(feature = "jit", not(target_os = "windows"), target_arch = "x86_64"))]
@@ -328,7 +336,7 @@ macro_rules! test_interpreter_and_jit {
                 Ok(()) => {
                     vm.registers[1] = ebpf::MM_INPUT_START;
                     let (instruction_count_jit, result_jit) = vm.execute_program(&$executable, false);
-                    let trace_jit = &vm.register_trace;
+                    let tracer_jit = &vm.context_object_pointer;
                     let mut diverged = false;
                     if format!("{:?}", result_interpreter) != format!("{:?}", result_jit) {
                         println!(
@@ -351,17 +359,17 @@ macro_rules! test_interpreter_and_jit {
                         );
                         diverged = true;
                     }
-                    if !compare_register_trace(&_trace_interpreter, trace_jit) {
+                    if !TestContextObject::compare_trace_log(&_tracer_interpreter, tracer_jit) {
                         let analysis = Analysis::from_executable(&$executable).unwrap();
                         let stdout = std::io::stdout();
                         analysis
-                            .disassemble_register_trace(
+                            .disassemble_trace_log(
                                 &mut stdout.lock(),
-                                &_trace_interpreter,
+                                &_tracer_interpreter.trace_log,
                             )
                             .unwrap();
                         analysis
-                            .disassemble_register_trace(&mut stdout.lock(), trace_jit)
+                            .disassemble_trace_log(&mut stdout.lock(), &tracer_jit.trace_log)
                             .unwrap();
                         diverged = true;
                     }
@@ -406,7 +414,7 @@ macro_rules! test_interpreter_and_jit_asm {
         #[allow(unused_mut)]
         {
             let mut config = $config;
-            config.enable_register_tracing = true;
+            config.enable_instruction_tracing = true;
             let loader = Arc::new(BuiltinProgram::new_loader(config));
             let mut executable = assemble($source, loader).unwrap();
             test_interpreter_and_jit!(executable, $mem, $context_object, $expected_result);
@@ -433,7 +441,7 @@ macro_rules! test_syscall_asm {
     };
     ($source:expr, $mem:expr, ($($syscall_name:expr => $syscall_function:expr),*$(,)?), $context_object:expr, $expected_result:expr $(,)?) => {
         let mut config = Config {
-            enable_register_tracing: true,
+            enable_instruction_tracing: true,
             ..Config::default()
         };
         for sbpf_version in [SBPFVersion::V0, SBPFVersion::V3] {
@@ -465,7 +473,7 @@ macro_rules! test_interpreter_and_jit_elf {
     };
     ($source:expr, $mem:expr, ($($syscall_name:expr => $syscall_function:expr),* $(,)?), $context_object:expr, $expected_result:expr $(,)?) => {
         let config = Config {
-            enable_register_tracing: true,
+            enable_instruction_tracing: true,
             ..Config::default()
         };
         test_interpreter_and_jit_elf!($source, config, $mem, ($($syscall_name => $syscall_function),*), $context_object, $expected_result);

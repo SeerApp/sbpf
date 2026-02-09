@@ -186,8 +186,8 @@ impl<'a, 'b, C: ContextObject> Interpreter<'a, 'b, C> {
         let dst = insn.dst as usize;
         let src = insn.src as usize;
 
-        if config.enable_register_tracing {
-            self.vm.register_trace.push(self.reg);
+        if config.enable_instruction_tracing {
+            self.vm.context_object_pointer.trace(self.reg);
         }
 
         seer_core::get(|seer| {

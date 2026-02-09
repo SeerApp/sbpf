@@ -5,7 +5,7 @@ use libfuzzer_sys::fuzz_target;
 use semantic_aware::*;
 use solana_sbpf::{
     insn_builder::IntoBytes,
-    program::{BuiltinFunction, FunctionRegistry},
+    program::{BuiltinFunction, FunctionRegistry, SBPFVersion},
     verifier::{RequisiteVerifier, Verifier},
 };
 use test_utils::TestContextObject;
@@ -23,7 +23,6 @@ struct FuzzData {
 
 fuzz_target!(|data: FuzzData| {
     let prog = make_program(&data.prog);
-    let sbpf_version = data.template.sbpf_version;
     let config = data.template.into();
     let function_registry = FunctionRegistry::default();
     let syscall_registry = FunctionRegistry::<BuiltinFunction<TestContextObject>>::default();
@@ -31,7 +30,7 @@ fuzz_target!(|data: FuzzData| {
     RequisiteVerifier::verify(
         prog.into_bytes(),
         &config,
-        sbpf_version,
+        SBPFVersion::V3,
         &function_registry,
         &syscall_registry,
     )

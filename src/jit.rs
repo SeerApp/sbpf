@@ -442,7 +442,7 @@ impl<'a, C: ContextObject> JitCompiler<'a, C> {
                 self.emit_validate_instruction_count(Some(self.pc));
             }
 
-            if self.config.enable_register_tracing {
+            if self.config.enable_instruction_tracing {
                 self.emit_ins(X86Instruction::load_immediate(REGISTER_SCRATCH, self.pc as i64));
                 self.emit_ins(X86Instruction::call_immediate(self.relative_to_anchor(ANCHOR_TRACE, 5)));
                 self.emit_ins(X86Instruction::load_immediate(REGISTER_SCRATCH, 0));
@@ -539,18 +539,7 @@ impl<'a, C: ContextObject> JitCompiler<'a, C> {
                         self.emit_ins(X86Instruction::alu(OperandSize::S64, 0x63, dst, dst, None)); // sign extend i32 to i64
                     }
                 },
-                ebpf::MUL32_IMM if !self.executable.get_sbpf_version().enable_pqr() => {
-                    if self.should_sanitize_constant(insn.imm) {
-                        self.emit_sanitized_load_immediate(REGISTER_SCRATCH, insn.imm);
-                    } else {
-                        self.emit_ins(X86Instruction::load_immediate(REGISTER_SCRATCH, insn.imm));
-                    }
-                    self.emit_ins(X86Instruction::alu_escaped(OperandSize::S32, 1, 0xaf, dst, REGISTER_SCRATCH, None));
-                    if !self.executable.get_sbpf_version().explicit_sign_extension_of_results() {
-                        self.emit_ins(X86Instruction::alu(OperandSize::S64, 0x63, dst, dst, None)); // sign extend i32 to i64
-                    }
-                },
-                ebpf::DIV32_IMM | ebpf::MOD32_IMM if !self.executable.get_sbpf_version().enable_pqr() =>
+                ebpf::MUL32_IMM | ebpf::DIV32_IMM | ebpf::MOD32_IMM if !self.executable.get_sbpf_version().enable_pqr() =>
                     self.emit_product_quotient_remainder(
                         OperandSize::S32,
                         (insn.opc & ebpf::BPF_ALU_OP_MASK) == ebpf::BPF_MOD,
@@ -561,13 +550,7 @@ impl<'a, C: ContextObject> JitCompiler<'a, C> {
                 ebpf::LD_1B_REG  if self.executable.get_sbpf_version().move_memory_instruction_classes() => {
                     self.emit_address_translation(Some(dst), Value::RegisterPlusConstant64(src, insn.off as i64, true), 1, None);
                 },
-                ebpf::MUL32_REG if !self.executable.get_sbpf_version().enable_pqr() => {
-                    self.emit_ins(X86Instruction::alu_escaped(OperandSize::S32, 1, 0xaf, dst, src, None));
-                    if !self.executable.get_sbpf_version().explicit_sign_extension_of_results() {
-                        self.emit_ins(X86Instruction::alu(OperandSize::S64, 0x63, dst, dst, None)); // sign extend i32 to i64
-                    }
-                },
-                ebpf::DIV32_REG | ebpf::MOD32_REG if !self.executable.get_sbpf_version().enable_pqr() =>
+                ebpf::MUL32_REG | ebpf::DIV32_REG | ebpf::MOD32_REG if !self.executable.get_sbpf_version().enable_pqr() =>
                     self.emit_product_quotient_remainder(
                         OperandSize::S32,
                         (insn.opc & ebpf::BPF_ALU_OP_MASK) == ebpf::BPF_MOD,
@@ -653,15 +636,7 @@ impl<'a, C: ContextObject> JitCompiler<'a, C> {
                     }
                 }
                 ebpf::SUB64_REG  => self.emit_ins(X86Instruction::alu(OperandSize::S64, 0x29, src, dst, None)),
-                ebpf::MUL64_IMM if !self.executable.get_sbpf_version().enable_pqr() => {
-                    if self.should_sanitize_constant(insn.imm) {
-                        self.emit_sanitized_load_immediate(REGISTER_SCRATCH, insn.imm);
-                    } else {
-                        self.emit_ins(X86Instruction::load_immediate(REGISTER_SCRATCH, insn.imm));
-                    }
-                    self.emit_ins(X86Instruction::alu_escaped(OperandSize::S64, 1, 0xaf, dst, REGISTER_SCRATCH, None));
-                },
-                ebpf::DIV64_IMM | ebpf::MOD64_IMM if !self.executable.get_sbpf_version().enable_pqr() =>
+                ebpf::MUL64_IMM | ebpf::DIV64_IMM | ebpf::MOD64_IMM if !self.executable.get_sbpf_version().enable_pqr() =>
                     self.emit_product_quotient_remainder(
                         OperandSize::S64,
                         (insn.opc & ebpf::BPF_ALU_OP_MASK) == ebpf::BPF_MOD,
@@ -675,10 +650,7 @@ impl<'a, C: ContextObject> JitCompiler<'a, C> {
                 ebpf::ST_2B_IMM  if self.executable.get_sbpf_version().move_memory_instruction_classes() => {
                     self.emit_address_translation(None, Value::RegisterPlusConstant64(dst, insn.off as i64, true), 2, Some(Value::Constant64(insn.imm, true)));
                 },
-                ebpf::MUL64_REG if !self.executable.get_sbpf_version().enable_pqr() => {
-                    self.emit_ins(X86Instruction::alu_escaped(OperandSize::S64, 1, 0xaf, dst, src, None));
-                },
-                ebpf::DIV64_REG | ebpf::MOD64_REG if !self.executable.get_sbpf_version().enable_pqr() =>
+                ebpf::MUL64_REG | ebpf::DIV64_REG | ebpf::MOD64_REG if !self.executable.get_sbpf_version().enable_pqr() =>
                     self.emit_product_quotient_remainder(
                         OperandSize::S64,
                         (insn.opc & ebpf::BPF_ALU_OP_MASK) == ebpf::BPF_MOD,
@@ -1402,7 +1374,7 @@ impl<'a, C: ContextObject> JitCompiler<'a, C> {
 
     fn emit_subroutines(&mut self) {
         // Routine for instruction tracing
-        if self.config.enable_register_tracing {
+        if self.config.enable_instruction_tracing {
             self.set_anchor(ANCHOR_TRACE);
             // Save registers on stack
             self.emit_ins(X86Instruction::push(REGISTER_SCRATCH, None));
@@ -1411,9 +1383,9 @@ impl<'a, C: ContextObject> JitCompiler<'a, C> {
             }
             self.emit_ins(X86Instruction::mov(OperandSize::S64, RSP, REGISTER_MAP[0]));
             self.emit_ins(X86Instruction::alu_immediate(OperandSize::S64, 0x81, 0, RSP, - 8 * 3, None)); // RSP -= 8 * 3;
-            self.emit_rust_call(Value::Constant64(Vec::<crate::static_analysis::RegisterTraceEntry>::push as *const u8 as i64, false), &[
+            self.emit_rust_call(Value::Constant64(C::trace as *const u8 as i64, false), &[
                 Argument { index: 1, value: Value::Register(REGISTER_MAP[0]) }, // registers
-                Argument { index: 0, value: Value::RegisterPlusConstant32(REGISTER_PTR_TO_VM, self.slot_in_vm(RuntimeEnvironmentSlot::RegisterTrace), false) },
+                Argument { index: 0, value: Value::RegisterIndirect(REGISTER_PTR_TO_VM, self.slot_in_vm(RuntimeEnvironmentSlot::ContextObjectPointer), false) },
             ], None);
             // Pop stack and return
             self.emit_ins(X86Instruction::alu_immediate(OperandSize::S64, 0x81, 0, RSP, 8 * 3, None)); // RSP += 8 * 3;
@@ -1503,7 +1475,7 @@ impl<'a, C: ContextObject> JitCompiler<'a, C> {
 
         // Handler for EbpfError::UnsupportedInstruction
         self.set_anchor(ANCHOR_CALL_UNSUPPORTED_INSTRUCTION);
-        if self.config.enable_register_tracing {
+        if self.config.enable_instruction_tracing {
             self.emit_ins(X86Instruction::call_immediate(self.relative_to_anchor(ANCHOR_TRACE, 5)));
         }
         self.emit_set_exception_kind(EbpfError::UnsupportedInstruction);
