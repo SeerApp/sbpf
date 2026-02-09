@@ -109,14 +109,16 @@ fn test_code_length_estimate() {
 
         for mut opcode in 0x00..=0xFF {
             let (registers, immediate) = match opcode {
-                0x85 => (0x00, Some(8)),
+                0x85 if !sbpf_version.static_syscalls() => (0x00, Some(8)),
+                0x85 if sbpf_version.static_syscalls() => (0x00, None),
                 0x8D => (0x88, Some(0)),
-                0xE5 => {
+                0x95 if sbpf_version.static_syscalls() => (0x00, Some(0x91020CDD)),
+                0xE5 if !sbpf_version.static_syscalls() => {
                     // Put external function calls on a separate loop iteration
                     opcode = 0x85;
                     (0x00, Some(0x91020CDD))
                 }
-                0xF5 => {
+                0xF5 if !sbpf_version.static_syscalls() => {
                     // Put invalid function calls on a separate loop iteration
                     opcode = 0x85;
                     (0x00, Some(0x91020CD0))
@@ -139,8 +141,11 @@ fn test_code_length_estimate() {
             };
             let mut executable = create_mockup_executable(config, &prog);
             let result = Executable::<TestContextObject>::jit_compile(&mut executable);
-            if let Err(err) = result {
-                assert!(matches!(err, EbpfError::UnsupportedInstruction));
+            if result.is_err() {
+                assert!(matches!(
+                    result.unwrap_err(),
+                    EbpfError::UnsupportedInstruction
+                ));
                 continue;
             }
             let machine_code_length = executable

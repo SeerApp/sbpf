@@ -19,7 +19,7 @@ use crate::{
     interpreter::Interpreter,
     memory_region::MemoryMapping,
     program::{BuiltinFunction, BuiltinProgram, FunctionRegistry, SBPFVersion},
-    static_analysis::{Analysis, RegisterTraceEntry},
+    static_analysis::Analysis,
 };
 use std::{collections::BTreeMap, fmt::Debug};
 
@@ -68,7 +68,7 @@ pub struct Config {
     /// Enable instruction meter and limiting
     pub enable_instruction_meter: bool,
     /// Enable instruction tracing
-    pub enable_register_tracing: bool,
+    pub enable_instruction_tracing: bool,
     /// Enable dynamic string allocation for labels
     pub enable_symbol_and_section_labels: bool,
     /// Reject ELF files containing issues that the verifier did not catch before (up to v0.2.21)
@@ -81,8 +81,6 @@ pub struct Config {
     pub sanitize_user_provided_values: bool,
     /// Avoid copying read only sections when possible
     pub optimize_rodata: bool,
-    /// Allow a memory region at age zero in the aligned memory mapping
-    pub allow_memory_region_zero: bool,
     /// Use aligned memory mapping
     pub aligned_memory_mapping: bool,
     /// Allowed [SBPFVersion]s
@@ -105,7 +103,7 @@ impl Default for Config {
             enable_stack_frame_gaps: true,
             instruction_meter_checkpoint_distance: 10000,
             enable_instruction_meter: true,
-            enable_register_tracing: false,
+            enable_instruction_tracing: false,
             enable_symbol_and_section_labels: false,
             reject_broken_elfs: false,
             #[cfg(feature = "jit")]
@@ -113,8 +111,7 @@ impl Default for Config {
             #[cfg(feature = "jit")]
             sanitize_user_provided_values: true,
             optimize_rodata: true,
-            allow_memory_region_zero: true,
-            aligned_memory_mapping: false,
+            aligned_memory_mapping: true,
             enabled_sbpf_versions: SBPFVersion::V0..=SBPFVersion::V4,
         }
     }
@@ -141,6 +138,8 @@ impl<C: ContextObject> Executable<C> {
 
 /// Runtime context
 pub trait ContextObject {
+    /// Called for every instruction executed when tracing is enabled
+    fn trace(&mut self, state: [u64; 12]);
     /// Consume instructions from meter
     fn consume(&mut self, amount: u64);
     /// Get the number of remaining instructions allowed
@@ -157,13 +156,13 @@ pub struct DynamicAnalysis {
 
 impl DynamicAnalysis {
     /// Accumulates a trace
-    pub fn new(register_trace: &[[u64; 12]], analysis: &Analysis) -> Self {
+    pub fn new(trace_log: &[[u64; 12]], analysis: &Analysis) -> Self {
         let mut result = Self {
             edge_counter_max: 0,
             edges: BTreeMap::new(),
         };
         let mut last_basic_block = usize::MAX;
-        for traced_instruction in register_trace.iter() {
+        for traced_instruction in trace_log.iter() {
             let pc = traced_instruction[11] as usize;
             if analysis.cfg_nodes.contains_key(&pc) {
                 let counter = result
@@ -214,8 +213,6 @@ pub enum RuntimeEnvironmentSlot {
     ProgramResult = 19,
     /// [EbpfVm::memory_mapping]
     MemoryMapping = 27,
-    /// [EbpfVm::register_trace]
-    RegisterTrace = 54,
 }
 
 /// A virtual machine to run eBPF programs.
@@ -236,7 +233,7 @@ pub enum RuntimeEnvironmentSlot {
 ///
 /// let prog = &[
 ///     0x07, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // add64 r10, 0
-///     0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00  // exit
+///     0x9d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00  // exit
 /// ];
 /// let mem = &mut [
 ///     0xaa, 0xbb, 0x11, 0x22, 0xcc, 0xdd
@@ -300,8 +297,6 @@ pub struct EbpfVm<'a, C: ContextObject> {
     pub call_frames: Vec<CallFrame>,
     /// Loader built-in program
     pub loader: Arc<BuiltinProgram<C>>,
-    /// Collector for the instruction trace
-    pub register_trace: Vec<RegisterTraceEntry>,
     /// TCP port for the debugger interface
     #[cfg(feature = "debugger")]
     pub debug_port: Option<u16>,
@@ -319,10 +314,12 @@ impl<'a, C: ContextObject> EbpfVm<'a, C> {
         let config = loader.get_config();
         let mut registers = [0u64; 12];
         registers[ebpf::FRAME_PTR_REG] =
-            ebpf::MM_STACK_START.saturating_add(if sbpf_version.automatic_stack_frame_bump() {
-                config.stack_frame_size
-            } else {
+            ebpf::MM_STACK_START.saturating_add(if sbpf_version.dynamic_stack_frames() {
+                // the stack is fully descending, frames start as empty and change size anytime r11 is modified
                 stack_len
+            } else {
+                // within a frame the stack grows down, but frames are ascending
+                config.stack_frame_size
             } as u64);
         if !config.enable_address_translation {
             memory_mapping = MemoryMapping::new_identity();
@@ -341,10 +338,7 @@ impl<'a, C: ContextObject> EbpfVm<'a, C> {
             call_frames: vec![CallFrame::default(); config.max_call_depth],
             loader,
             #[cfg(feature = "debugger")]
-            debug_port: std::env::var("VM_DEBUG_PORT")
-                .ok()
-                .and_then(|v| v.parse::<u16>().ok()),
-            register_trace: Vec::default(),
+            debug_port: None,
         }
     }
 

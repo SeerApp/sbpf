@@ -52,6 +52,15 @@ fn test_exit() {
 }
 
 #[test]
+fn test_return() {
+    let config = Config {
+        enabled_sbpf_versions: SBPFVersion::V3..=SBPFVersion::V3,
+        ..Config::default()
+    };
+    disasm!("entrypoint:\n    return\n", config);
+}
+
+#[test]
 fn test_static_syscall() {
     let config = Config {
         enabled_sbpf_versions: SBPFVersion::V3..=SBPFVersion::V3,
@@ -95,7 +104,26 @@ fn test_ja() {
         "entrypoint:
     ja lbb_1
 lbb_1:
-    exit
+    return
+"
+    );
+}
+
+// Example for InstructionType::JumpConditional.
+#[test]
+fn test_jeq() {
+    disasm!(
+        "entrypoint:
+    jeq r1, 4, lbb_1
+lbb_1:
+    return
+"
+    );
+    disasm!(
+        "entrypoint:
+    jeq r1, r3, lbb_1
+lbb_1:
+    return
 "
     );
 }
@@ -108,7 +136,7 @@ fn test_call() {
     call function_1
 
 function_1:
-    exit
+    return
 "
     );
 }
@@ -205,15 +233,6 @@ fn test_alu_binary() {
     arsh32 r1, 2
 "
     );
-}
-
-// Test PQR AluBinary mnemonics.
-#[test]
-fn test_pqr() {
-    let config = Config {
-        enabled_sbpf_versions: SBPFVersion::V2..=SBPFVersion::V2,
-        ..Config::default()
-    };
 
     disasm!(
         "entrypoint:
@@ -229,8 +248,7 @@ fn test_pqr() {
     sdiv32 r1, r2
     srem64 r1, r2
     srem32 r1, r2
-",
-        config.clone()
+"
     );
 
     disasm!(
@@ -247,8 +265,7 @@ fn test_pqr() {
     sdiv32 r1, 2
     srem64 r1, 2
     srem32 r1, 2
-",
-        config
+"
     );
 }
 
@@ -308,7 +325,7 @@ fn test_jump_conditional() {
     jslt r1, r2, lbb_11
     jsle r1, r2, lbb_11
 lbb_11:
-    exit
+    return
 "
     );
 
@@ -326,43 +343,7 @@ lbb_11:
     jslt r1, 2, lbb_11
     jsle r1, 2, lbb_11
 lbb_11:
-    exit
-"
-    );
-
-    disasm!(
-        "entrypoint:
-    jeq32 r1, r2, lbb_11
-    jgt32 r1, r2, lbb_11
-    jge32 r1, r2, lbb_11
-    jlt32 r1, r2, lbb_11
-    jle32 r1, r2, lbb_11
-    jset32 r1, r2, lbb_11
-    jne32 r1, r2, lbb_11
-    jsgt32 r1, r2, lbb_11
-    jsge32 r1, r2, lbb_11
-    jslt32 r1, r2, lbb_11
-    jsle32 r1, r2, lbb_11
-lbb_11:
-    exit
-"
-    );
-
-    disasm!(
-        "entrypoint:
-    jeq32 r1, 2, lbb_11
-    jgt32 r1, 2, lbb_11
-    jge32 r1, 2, lbb_11
-    jlt32 r1, 2, lbb_11
-    jle32 r1, 2, lbb_11
-    jset32 r1, 2, lbb_11
-    jne32 r1, 2, lbb_11
-    jsgt32 r1, 2, lbb_11
-    jsge32 r1, 2, lbb_11
-    jslt32 r1, 2, lbb_11
-    jsle32 r1, 2, lbb_11
-lbb_11:
-    exit
+    return
 "
     );
 }
@@ -386,20 +367,4 @@ fn test_endian() {
 fn test_large_immediate() {
     disasm!("entrypoint:\n    add64 r1, -1\n");
     disasm!("entrypoint:\n    add64 r1, -1\n");
-}
-
-#[test]
-fn test_callx() {
-    for version in [
-        SBPFVersion::V0,
-        SBPFVersion::V2,
-        SBPFVersion::V3,
-        SBPFVersion::V4,
-    ] {
-        let config = Config {
-            enabled_sbpf_versions: version..=version,
-            ..Config::default()
-        };
-        disasm!("entrypoint:\n    callx r8\n", config);
-    }
 }
