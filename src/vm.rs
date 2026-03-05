@@ -23,6 +23,7 @@ use crate::{
 };
 use std::{collections::BTreeMap, fmt::Debug};
 
+use seer_core::seer_debug;
 #[cfg(feature = "shuttle-test")]
 use shuttle::sync::Arc;
 #[cfg(not(feature = "shuttle-test"))]
@@ -357,6 +358,7 @@ impl<'a, C: ContextObject> EbpfVm<'a, C> {
         self.previous_instruction_meter = initial_insn_count;
         self.due_insn_count = 0;
         self.program_result = ProgramResult::Ok(0);
+        seer_debug!("Program is interpreted: {}", interpreted);
         if interpreted {
             #[cfg(feature = "debugger")]
             let debug_port = self.debug_port.clone();
