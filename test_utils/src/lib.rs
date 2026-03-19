@@ -30,10 +30,6 @@ pub struct TestContextObject {
 }
 
 impl ContextObject for TestContextObject {
-    fn trace(&mut self, state: [u64; 12]) {
-        self.trace_log.push(state);
-    }
-
     fn consume(&mut self, amount: u64) {
         self.remaining = self.remaining.saturating_sub(amount);
     }

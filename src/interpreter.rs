@@ -186,10 +186,6 @@ impl<'a, 'b, C: ContextObject> Interpreter<'a, 'b, C> {
         let dst = insn.dst as usize;
         let src = insn.src as usize;
 
-        if config.enable_instruction_tracing {
-            self.vm.context_object_pointer.trace(self.reg);
-        }
-
         seer_core::get(|seer| {
             seer.step(self.get_dbg_pc(), &mut self.vm.memory_mapping, &self.reg);
         });

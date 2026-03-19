@@ -68,18 +68,10 @@ pub struct Config {
     pub instruction_meter_checkpoint_distance: usize,
     /// Enable instruction meter and limiting
     pub enable_instruction_meter: bool,
-    /// Enable instruction tracing
-    pub enable_instruction_tracing: bool,
     /// Enable dynamic string allocation for labels
     pub enable_symbol_and_section_labels: bool,
     /// Reject ELF files containing issues that the verifier did not catch before (up to v0.2.21)
     pub reject_broken_elfs: bool,
-    #[cfg(feature = "jit")]
-    /// Ratio of native host instructions per random no-op in JIT (0 = OFF)
-    pub noop_instruction_rate: u32,
-    #[cfg(feature = "jit")]
-    /// Enable disinfection of immediate values and offsets provided by the user in JIT
-    pub sanitize_user_provided_values: bool,
     /// Avoid copying read only sections when possible
     pub optimize_rodata: bool,
     /// Use aligned memory mapping
@@ -104,13 +96,8 @@ impl Default for Config {
             enable_stack_frame_gaps: true,
             instruction_meter_checkpoint_distance: 10000,
             enable_instruction_meter: true,
-            enable_instruction_tracing: false,
             enable_symbol_and_section_labels: false,
             reject_broken_elfs: false,
-            #[cfg(feature = "jit")]
-            noop_instruction_rate: 256,
-            #[cfg(feature = "jit")]
-            sanitize_user_provided_values: true,
             optimize_rodata: true,
             aligned_memory_mapping: true,
             enabled_sbpf_versions: SBPFVersion::V0..=SBPFVersion::V4,
@@ -139,8 +126,6 @@ impl<C: ContextObject> Executable<C> {
 
 /// Runtime context
 pub trait ContextObject {
-    /// Called for every instruction executed when tracing is enabled
-    fn trace(&mut self, state: [u64; 12]);
     /// Consume instructions from meter
     fn consume(&mut self, amount: u64);
     /// Get the number of remaining instructions allowed
