@@ -40,14 +40,6 @@ pub mod jit;
 #[cfg(all(feature = "jit", not(target_os = "windows"), target_arch = "x86_64"))]
 mod memory_management;
 pub mod memory_region;
-/// Re-exports for loaders that install account-read tracing without depending on `seer-core` directly.
-pub mod seer_account_read {
-    pub use seer_core::{
-        get,
-        account_reads::scanner::{AccountVmLayout}
-    };
-
-}
 pub mod program;
 pub mod static_analysis;
 pub mod verifier;

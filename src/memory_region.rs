@@ -540,9 +540,6 @@ impl<'a> MemoryMapping<'a> {
         match self.map_with_access_violation_handler(AccessType::Load, vm_addr, len) {
             ProgramResult::Ok(host_addr) => {
                 // SAFETY: `host_addr` is the mapped host address for `len` bytes at `vm_addr`.
-                seer_core::get(|seer| {
-                    seer.capture_account_read(vm_addr, len);
-                });
                 ProgramResult::Ok(unsafe { ptr::read_unaligned::<T>(host_addr as *const T) }.into())
             }
             err => err,
