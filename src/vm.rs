@@ -436,6 +436,10 @@ impl<'a, C: ContextObject> EbpfVm<'a, C> {
         self.previous_instruction_meter = initial_insn_count;
         self.due_insn_count = 0;
         self.program_result = ProgramResult::Ok(0);
+        seer_core::seer_debug!(
+            "Program is interpreted: {}",
+            matches!(*mode, ExecutionMode::Interpreted)
+        );
 
         'execute: {
             match *mode {
