@@ -352,7 +352,6 @@ impl<C: ContextObject> Executable<C> {
     }
 
     /// Get the text section offset in the ELF file
-    #[cfg(feature = "debugger")]
     pub fn get_text_section_offset(&self) -> u64 {
         self.text_section_range.start as u64
     }

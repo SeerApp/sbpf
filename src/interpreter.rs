@@ -198,7 +198,8 @@ impl<'a, 'b, 'c, C: ContextObject> Interpreter<'a, 'b, 'c, C> {
         let src = insn.src as usize;
 
         seer_interface::hooks().map(|h| {
-            let pc = (self.reg[11] * ebpf::INSN_SIZE as u64) + self.program_vm_addr;
+            let pc = (self.reg[11] * ebpf::INSN_SIZE as u64)
+                + self.executable.get_text_section_offset();
             (h.step)(pc, self.vm.memory(), &self.reg);
         });
 
