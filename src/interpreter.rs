@@ -197,9 +197,9 @@ impl<'a, 'b, 'c, C: ContextObject> Interpreter<'a, 'b, 'c, C> {
         let dst = insn.dst as usize;
         let src = insn.src as usize;
 
-        seer_core::get(|seer| {
+        seer_interface::hooks().map(|h| {
             let pc = (self.reg[11] * ebpf::INSN_SIZE as u64) + self.program_vm_addr;
-            seer.step(pc, self.vm.memory(), &self.reg);
+            (h.step)(pc, self.vm.memory(), &self.reg);
         });
 
         if config.enable_register_tracing {
