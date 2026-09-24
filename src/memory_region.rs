@@ -857,7 +857,7 @@ impl MemoryMapping {
     }
 }
 
-impl seer_interface::GuestMemory for MemoryMapping {
+impl hooks::GuestMemory for MemoryMapping {
     fn read(&mut self, addr: u64, len: u64) -> Vec<u8> {
         let host_addr = match self.map_with_access_violation_handler(AccessType::Load, addr, len) {
             ProgramResult::Ok(ptr) => ptr,
